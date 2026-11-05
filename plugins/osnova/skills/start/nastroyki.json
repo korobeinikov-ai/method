@@ -1,0 +1,49 @@
+{
+  "versiya": 1,
+  "chto_novogo": "первая версия: модель и глубина как у автора, охрана секретов, автообновление пакета",
+  "zachem": {
+    "model": "Модель — Opus, самая сильная, как у автора",
+    "effortLevel": "Глубина размышлений — высокая, как у автора",
+    "modelSettings": "Глубина размышлений — высокая, как у автора",
+    "permissions.defaultMode": "Режим «делаю сам, опасное останавливаю»: Claude работает без лишних вопросов, рискованное задерживает охрана",
+    "permissions.deny": "Запреты: обычными командами не открывать файлы с ключами и паролями, не удалять папки целиком, ничего не делать от имени администратора (главная защита ключей — охрана пакета)",
+    "permissions.allow": "Безопасный просмотр (список файлов, состояние проекта) — сразу, без лишних проверок",
+    "autoMode.soft_deny": "Всегда спрашивать перед: перезаписью истории на GitHub, откатом без возврата, сохранением без проверки, отключением проверки секретов, выкладкой в интернет и сменой ключей там",
+    "extraKnownMarketplaces": "Пакет KOROBEINIKOV AI обновляется сам при запуске Claude"
+  },
+  "nastroyki": {
+    "model": "opus",
+    "effortLevel": "high",
+    "modelSettings": { "claude-opus-5-5": { "effortLevel": "high" } },
+    "permissions": {
+      "defaultMode": "auto",
+      "deny": [
+        "Read(**/.env)", "Read(**/.env.*)", "Read(**/secrets/**)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
+        "Bash(cat *.env*)", "Bash(grep *.env*)", "Bash(rg *.env*)", "Bash(head *.env*)", "Bash(tail *.env*)",
+        "Bash(wc *.env*)", "Bash(less *.env*)", "Bash(more *.env*)",
+        "Bash(*.ssh/*)", "Bash(*.aws/*)", "Bash(*secrets/*)",
+        "Bash(rm -rf:*)", "Bash(rm -fr:*)", "Bash(sudo:*)"
+      ],
+      "allow": [
+        "Bash(ls:*)", "Bash(pwd)", "Bash(which:*)", "Bash(git status)", "Bash(gh auth status)"
+      ]
+    },
+    "autoMode": {
+      "soft_deny": [
+        "$defaults",
+        "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git reset --hard:*)",
+        "Bash(*--no-verify*)", "Bash(git commit -n*)", "Bash(git commit * -n*)",
+        "Bash(*core.hooksPath*)", "Bash(*hookspath*)", "Bash(*VERIFY_OK*)",
+        "Bash(railway up:*)", "Bash(railway variables set:*)", "Bash(railway environment:*prod*)"
+      ]
+    }
+  },
+  "vsegda": {
+    "extraKnownMarketplaces": {
+      "korobeinikov-ai-method": {
+        "source": { "source": "github", "repo": "korobeinikov-ai/method" },
+        "autoUpdate": true
+      }
+    }
+  }
+}
