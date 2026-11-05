@@ -29,11 +29,10 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 Если в поле уже есть серая строка, это только подсказка: вставляйте поверх, Enter на ней не нажимайте.
 
 ```
-Поставь мне пакет KOROBEINIKOV AI. Я не программист: всё делай сам, пиши коротко, а где нужны мои руки — скажи точно, что нажать. Homebrew не ставь. По шагам:
-1) Проверь xcode-select -p. Инструментов Apple нет — запусти xcode-select --install, скажи мне в окне нажать «Установить» и дождись конца в фоне.
-2) Выполни claude plugin marketplace add korobeinikov-ai/method, затем claude plugin install osnova@korobeinikov-ai-method.
-3) Скажи мне набрать /exit, а потом claude начнём.
+Поставь мне метод KOROBEINIKOV AI. Прочитай инструкцию для тебя целиком и сделай всё по ней: https://raw.githubusercontent.com/korobeinikov-ai/method/main/CLAUDE.md
 ```
+
+Claude будет спрашивать разрешение перед каждым действием: просто нажимайте Enter.
 
 Дальше Claude проведёт сам.
 
