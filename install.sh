@@ -8,6 +8,10 @@ set -uo pipefail
 FRAZA='Установи систему метода Коробейникова. Прочитай инструкцию для тебя целиком и сделай всё по ней: https://raw.githubusercontent.com/korobeinikov-ai/method/main/CLAUDE.md'
 
 [ "$(uname)" = Darwin ] || { echo "Метод пока работает только на Mac."; exit 1; }
+[ "$(sw_vers -productVersion | cut -d. -f1)" -ge 13 ] || {
+  echo "❌ Claude работает на macOS 13 и новее, у вас $(sw_vers -productVersion). Обновите систему: яблоко в левом верхнем углу → «Об этом Mac» → «Обновление ПО», потом вставьте строку ещё раз."
+  exit 1
+}
 export PATH="$HOME/.local/bin:$PATH"
 
 # Инструменты Apple качаются дольше всего: запускаем первыми, остальное ставим, пока они идут.
@@ -37,12 +41,18 @@ command -v claude >/dev/null || {
   exit 1
 }
 
-# Терминал Zed и новые окна должны находить claude.
-grep -qs '\.local/bin' "$HOME/.zshrc" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+# Терминал Zed и новые окна должны находить claude. На учётке, перенесённой со старого Mac, оболочка бывает bash.
+case "${SHELL:-}" in
+  *bash) rcs=".bash_profile .bashrc" ;;
+  *) rcs=".zshrc" ;;
+esac
+for rc in $rcs; do
+  grep -qs '\.local/bin' "$HOME/$rc" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/$rc"
+done
 
 echo
 echo "Запускаю Claude. Войдите своей подпиской (откроется браузер), на вопросах первого запуска нажимайте Enter."
 claude "$FRAZA"
 
 # Это окно открыто до установки и не знает, где claude, а инструкция просит запустить его снова.
-exec zsh -l
+exec "${SHELL:-/bin/zsh}" -l
