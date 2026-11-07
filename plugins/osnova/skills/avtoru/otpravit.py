@@ -76,7 +76,7 @@ def main(argv):
     if not shutil.which("gitleaks"):
         reason = f"нет сторожа секретов — запусти: bash {ROOT}/skills/start/instrumenty.sh"
     else:
-        code, _ = run(["gitleaks", "stdin", "--no-banner", "--redact"], text)
+        code, _ = run(["gitleaks", "stdin", "--no-banner", "--redact", "--config", str(ROOT / "skelet" / ".gitleaks.toml")], text)
         if code == 1:
             print("❌ В тексте что-то похожее на ключ или пароль — убери его и отправь снова. Ничего не ушло.")
             return 2

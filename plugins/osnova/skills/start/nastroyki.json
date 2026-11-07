@@ -1,12 +1,12 @@
 {
-  "versiya": 1,
-  "chto_novogo": "первая версия: модель и глубина как у автора, охрана секретов, автообновление пакета",
+  "versiya": 2,
+  "chto_novogo": "охрана ключей для Telegram-бота и Railway: ключи не попадают в разговор, смена ключей на Railway только с подтверждением",
   "zachem": {
     "model": "Модель — Opus, самая сильная, как у автора",
     "effortLevel": "Глубина размышлений — высокая, как у автора",
     "modelSettings": "Глубина размышлений — высокая, как у автора",
     "permissions.defaultMode": "Режим «делаю сам, опасное останавливаю»: Claude работает без лишних вопросов, рискованное задерживает охрана",
-    "permissions.deny": "Запреты: обычными командами не открывать файлы с ключами и паролями, не удалять папки целиком, ничего не делать от имени администратора (главная защита ключей — охрана пакета)",
+    "permissions.deny": "Запреты: обычными командами не открывать файлы с ключами и паролями, не выводить в разговор ключи с Railway и из буфера обмена, не удалять папки целиком, ничего не делать от имени администратора (главная защита ключей — охрана пакета)",
     "permissions.allow": "Безопасный просмотр (список файлов, состояние проекта) — сразу, без лишних проверок",
     "autoMode.soft_deny": "Всегда спрашивать перед: перезаписью истории на GitHub, откатом без возврата, сохранением без проверки, отключением проверки секретов, выкладкой в интернет и сменой ключей там",
     "extraKnownMarketplaces": "Пакет KOROBEINIKOV AI обновляется сам при запуске Claude"
@@ -22,6 +22,10 @@
         "Bash(cat *.env*)", "Bash(grep *.env*)", "Bash(rg *.env*)", "Bash(head *.env*)", "Bash(tail *.env*)",
         "Bash(wc *.env*)", "Bash(less *.env*)", "Bash(more *.env*)",
         "Bash(*.ssh/*)", "Bash(*.aws/*)", "Bash(*secrets/*)",
+        "Bash(*railway*variable*list*)", "Bash(*railway var*)", "Bash(*railway run*)", "Bash(*railway local*)",
+        "Bash(*railway api*)", "Bash(*railway ssh*)", "Bash(*railway shell*)", "Bash(*railway config*)",
+        "Bash(*railway env* config*)", "Bash(*railway env* show*)", "Bash(*railway env* info*)",
+        "Bash(*railway env*variables.*)", "Bash(*pbpaste*)",
         "Bash(rm -rf:*)", "Bash(rm -fr:*)", "Bash(sudo:*)"
       ],
       "allow": [
@@ -34,7 +38,7 @@
         "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git reset --hard:*)",
         "Bash(*--no-verify*)", "Bash(git commit -n*)", "Bash(git commit * -n*)",
         "Bash(*core.hooksPath*)", "Bash(*hookspath*)", "Bash(*VERIFY_OK*)",
-        "Bash(railway up:*)", "Bash(railway variables set:*)", "Bash(railway environment:*prod*)"
+        "Bash(railway up:*)", "Bash(*klyuch.py*peredat*)","Bash(railway environment:*prod*)"
       ]
     }
   },

@@ -37,7 +37,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 Если в поле уже есть серая строка, это только подсказка: вставляйте поверх, Enter на ней не нажимайте.
 
 ```
-Поставь мне метод KOROBEINIKOV AI. Прочитай инструкцию для тебя целиком и сделай всё по ней: https://raw.githubusercontent.com/korobeinikov-ai/method/main/CLAUDE.md
+Установи систему метода Коробейникова. Прочитай инструкцию для тебя целиком и сделай всё по ней: https://raw.githubusercontent.com/korobeinikov-ai/method/main/CLAUDE.md
 ```
 
 Claude будет спрашивать разрешение перед каждым действием: просто нажимайте Enter.

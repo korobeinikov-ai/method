@@ -32,6 +32,17 @@ get() {
   fi
 }
 
+# Railway нужен только там, где что-то выкладывают: ставится отдельно, по просьбе маршрута.
+if [ "${1:-}" = railway ]; then
+  RW=https://github.com/railwayapp/cli/releases/download/v5.71.0/railway-v5.71.0
+  if [ "$(uname -m)" = arm64 ]; then
+    get railway "$RW-aarch64-apple-darwin.tar.gz" 350748f2edf41f46b22c5d66cea4294d660e764804e252ddba08a27b19cd0bd1
+  else
+    get railway "$RW-x86_64-apple-darwin.tar.gz" 1b41dd77292657c80ae3dfccbe7653bbb40b7cdc95a8f4b06c2c1f0c2a009919
+  fi
+  exit $bad
+fi
+
 GH=https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_macOS
 GL=https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin
 RF=https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff
