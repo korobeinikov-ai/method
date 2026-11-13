@@ -3,7 +3,12 @@
 
 Это защита от случайной ошибки Claude, не от умышленного обхода (второй слой —
 сторож секретов на pre-commit в проекте). Команду до конца не разбираем — её
-всегда можно записать хитрее; смотрим состояние git и ставим три рубежа:
+всегда можно записать хитрее; смотрим состояние git и ставим три рубежа.
+
+Из команды узнаём только, в какие репозитории пишет git, и проверяем каждый: папку сеанса и всё,
+куда ведут cd / pushd, git -C, --git-dir, --work-tree (и внутри bash -c, eval, скобок). Путь через
+переменную, подстановку или шаблон, GIT_DIR / GIT_WORK_TREE — цель не узнать: запись в git блокируется.
+git add / commit / push туда, где репозитория до команды нет (git init в той же команде), — тоже блок.
 
 PreToolUse (Bash: git add / commit / push) — блок, если секретный .env:
   - уже отслеживается git (утечка уже в истории; на push — последний рубеж),
@@ -33,7 +38,8 @@ import sys
 GIT_WRITE = re.compile(r"\bgit\b[^|;&]*\b(add|commit|push)\b")
 GIT_ANY = re.compile(r"\bgit\b")
 # git внутри чужого репо: выключить то, что его настройки могут исполнить
-SAFE_GIT = ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"]
+# (и только команды, которые не читают файлы: status запустил бы фильтры из настроек репо, log — проверку подписи)
+SAFE_GIT = ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "log.showSignature=false"]
 QUOTES = "'\"`()$;&|"
 ALLOW_FILE = ".env-public"
 PUBLIC_PREFIXES = ("VITE_", "NEXT_PUBLIC_", "PUBLIC_", "EXPO_PUBLIC_", "REACT_APP_")
@@ -41,6 +47,29 @@ VAR_LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
 SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 SAFE_PATH = re.compile(r"^[A-Za-z0-9_./-]+$")
 MAX_UNPUSHED = 200  # больше — не проверяем и исключение не даём
+# куда пишет git: разбор команды до слов, как её читает bash
+SHELL_OPS = "();<>|&\n"
+SKIP_WORDS = {"{", "!", "if", "then", "else", "elif", "do", "while", "until", "time", "command", "builtin", "exec",
+              "nohup"}
+SHELLS = {"bash", "sh", "zsh", "dash"}
+GIT_VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "-c", "--namespace", "--config-env"}  # значение — следующим словом
+WRITE_SUBS = {"add", "commit", "push", "update-index"}
+VAGUE = re.compile(r"[$`*?\[\]{}]")  # переменная, подстановка, шаблон: путь не узнать, не запустив команду
+VAR_PATH = re.compile(r"^\$(?:\{(HOME|PWD)\}|(HOME|PWD))(?=$|/)")
+# текст внутри <<EOF … EOF (описание коммита) — не команды: его кавычки только путают разбор.
+# Есть в нём cd, -C и подобное — оставляем: вдруг это скрипт, который тут же запустят
+HEREDOC = re.compile(r"(<<-?[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*\n)(.*?)^[ \t]*\3[ \t]*$",
+                     re.DOTALL | re.MULTILINE)
+GIT_ENV = re.compile(r"^(GIT_DIR|GIT_WORK_TREE)=")
+ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+TARGET_HINT = re.compile(r"\b(cd|pushd|popd|eval)\b|-C|--chdir|--git-dir|--work-tree|GIT_DIR|GIT_WORK_TREE|PWD")
+UNKNOWN_TARGET = ("ЗАБЛОКИРОВАНО: не понял, в какой папке git запишет файлы (путь через переменную, подстановку или "
+                  "шаблон, GIT_DIR / GIT_WORK_TREE), — проверить там .env нечем (правило безопасности).\n"
+                  "Напиши путь к папке проекта прямо: `cd ~/vibecoding/<проект> && git add …` или "
+                  "`git -C ~/vibecoding/<проект> add …`; несколько папок — отдельной командой на каждую.")
+NOT_REPO = ("ЗАБЛОКИРОВАНО: git запишет в папку, где репозитория ещё нет (или нет самой папки): {}. Проверить там .env "
+            "до команды нечем (правило безопасности).\nСначала отдельной командой заведи репозиторий (`git init`) и "
+            ".gitignore с .env, потом добавляй и сохраняй файлы.")
 
 
 def is_secret_env(path: str) -> bool:
@@ -83,11 +112,180 @@ def git_lines(args, cwd):
     return out.splitlines()
 
 
-def porcelain_path(line: str) -> str:
-    p = line[3:]
-    if " -> " in p:
-        p = p.split(" -> ")[-1]
-    return p.strip().strip('"')
+def clean(cmd):
+    """То, что bash выбрасывает до разбора: перенос строки через «\\», текст heredoc, комментарии # …
+    (только с начала слова и не в кавычках; перенос строки после комментария остаётся разделителем)."""
+    cmd = cmd.replace("\\\n", "")
+    cmd = HEREDOC.sub(lambda m: m.group(0) if TARGET_HINT.search(m.group(4)) else m.group(1), cmd)
+    out, quote, i = [], None, 0
+    while i < len(cmd):
+        c = cmd[i]
+        if c == "\\" and quote != "'":
+            out.append(cmd[i:i + 2])
+            i += 2
+            continue
+        if quote:
+            quote = None if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or cmd[i - 1] in " \t\n;&|()"):
+            end = cmd.find("\n", i)
+            i = len(cmd) if end < 0 else end
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def words(cmd):
+    """Команда → слова и знаки оболочки (&&, ;, |, скобки, перенос строки); кавычки сняты, как у bash."""
+    lex = shlex.shlex(cmd, posix=True, punctuation_chars=SHELL_OPS)
+    lex.whitespace = " \t\r"  # перенос строки разделяет команды, как «;»
+    lex.whitespace_split = True
+    lex.commenters = ""  # комментарии убрал clean(): shlex срезал бы и «#» посреди слова, и перенос строки
+    return list(lex)
+
+
+def place(cur, path):
+    """Путь из команды → полный путь от папки cur; None — если его не узнать, не запустив команду."""
+    m = VAR_PATH.match(path)
+    rest = path[m.end():] if m else path
+    if not path or VAGUE.search(rest):
+        return None
+    if m:
+        start = "~" if (m.group(1) or m.group(2)) == "HOME" else cur
+        if start is None:
+            return None
+        path = start + rest
+    path = os.path.expanduser(path)
+    if os.path.isabs(path):
+        return os.path.normpath(path)
+    return os.path.normpath(os.path.join(cur, path)) if cur else None
+
+
+def git_target(args, cur):
+    """Опции git перед подкомандой → (папка, ("--git-dir=…", "--work-tree=…"), пишет ли подкоманда в git)
+    или None, если путь не узнать. Как у git: -C складываются по очереди, --git-dir и --work-tree
+    считаются от итоговой папки."""
+    where, given, i = cur, [], 0
+    while i < len(args) and args[i].startswith("-"):
+        opt, eq, val = args[i].partition("=")
+        if not eq and opt in GIT_VALUE_OPTS:
+            i += 1
+            val = args[i] if i < len(args) else ""
+        if opt == "-C":
+            where = place(where, val)
+        elif opt in ("--git-dir", "--work-tree"):
+            given.append((opt, val))
+        i += 1
+    if where is None:
+        return None
+    opts = []
+    for opt, val in given:
+        full = place(where, val)
+        if full is None:
+            return None
+        opts.append(f"{opt}={full}")
+    return where, tuple(opts), i < len(args) and args[i] in WRITE_SUBS
+
+
+def targets(cmd, cur, depth=0):
+    """Куда в команде пишет git: ([(папка, опции git, запись ли это)], узнали ли все цели).
+    С запасом: и каждая папка, куда команда переходит (вдруг cd стоит после || или в скобках)."""
+    cmd = clean(cmd)
+    try:
+        toks = words(cmd)
+    except ValueError:  # кавычки не разобрать: без cd, -C и подобного цель — сама папка сеанса
+        return [], not TARGET_HINT.search(cmd)
+    found, sure, back, pushed, ws, redirect = [], True, [], [], [], False
+    prev = None  # папка до последнего cd — туда ведёт «cd -»
+
+    def simple(ws):
+        nonlocal cur, sure, prev
+        if any(GIT_ENV.match(w) for w in ws):
+            sure = False
+        while ws and (ws[0] in SKIP_WORDS or ASSIGN.match(ws[0])):
+            ws = ws[1:]
+        name = os.path.basename(ws[0]) if ws else ""
+        if name in ("cd", "pushd"):
+            args = [w for w in ws[1:] if w == "-" or not w.startswith("-")]
+            if name == "pushd":
+                pushed.append(cur)
+            if not args:
+                new = os.path.expanduser("~") if name == "cd" else None
+            else:
+                new = prev if args[0] == "-" else place(cur, args[0])
+            prev, cur = cur, new
+            if cur:
+                found.append((cur, (), False))
+            return
+        if name == "popd":
+            prev, cur = cur, (pushed.pop() if pushed else None)
+            return
+        here = cur
+        if name == "env":  # env -C папка git … — git работает в той папке
+            for j, w in enumerate(ws[1:], 1):
+                opt, eq, val = w.partition("=")
+                if opt in ("-C", "--chdir"):
+                    here = place(cur, val if eq else (ws[j + 1] if j + 1 < len(ws) else ""))
+        script = " ".join(ws[1:]) if name == "eval" else None
+        if name in SHELLS:
+            script = next((ws[j + 1] for j in range(1, len(ws) - 1) if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", ws[j])),
+                          None)
+        if script is not None:
+            sub, ok = targets(script, cur, depth + 1) if depth < 3 else ([], False)
+            found.extend(sub)
+            sure = sure and ok
+        for j, w in enumerate(ws):
+            if os.path.basename(w) == "git":
+                t = git_target(ws[j + 1:], here)
+                sure = sure and t is not None
+                if t:
+                    found.append(t)
+
+    for t in toks:
+        if t and all(c in SHELL_OPS for c in t):
+            if "<" in t or ">" in t:
+                redirect = True  # следующее слово — файл, не команда
+            else:
+                simple(ws)
+                ws = []
+            for c in t:
+                if c == "(":
+                    back.append(cur)
+                elif c == ")" and back:
+                    cur = back.pop()
+        elif redirect:
+            redirect = False
+        else:
+            ws.append(t)
+    simple(ws)
+    return found, sure
+
+
+def repos(cmd, cwd):
+    """Репозитории, куда может писать команда: ([(корень, опции git)], узнали ли все цели,
+    [папки, куда git add / commit / push пишет, а репозитория там до команды нет])."""
+    base = cwd or os.getcwd()
+    found, sure = targets(cmd, base)
+    seen, unready = {}, []
+    for where, opts, write in [(base, (), False), *found]:
+        out = []  # не репозиторий или папки нет: проверять нечего, а запись туда — не проверить
+        try:
+            if os.path.isdir(where):
+                out = subprocess.check_output([*SAFE_GIT, *opts, "rev-parse", "--absolute-git-dir", "--show-toplevel"],
+                                              text=True, timeout=5, cwd=where, stderr=subprocess.DEVNULL).splitlines()
+        except subprocess.CalledProcessError:
+            out = []  # git ответил: это не репозиторий
+        except (OSError, subprocess.SubprocessError) as e:
+            sys.stderr.write(f"block-env-commit: не смог проверить папку {where}: {e}\n")
+            continue
+        if len(out) == 2:
+            root = os.path.realpath(out[1])
+            seen[(out[0], root)] = (root, (f"--git-dir={out[0]}", f"--work-tree={root}"))
+        elif write and where not in unready:
+            unready.append(where)
+    return list(seen.values()), sure, unready
 
 
 def secrets(args, cwd):
@@ -109,23 +307,19 @@ def not_public(text):
     return issues
 
 
-def git_version(spec, root):
+def git_version(spec, root, opts):
     """Содержимое версии файла в git (":путь" — подготовленное, "HEAD:путь" — сохранённое) или None."""
     try:
-        return subprocess.check_output([*SAFE_GIT, "show", spec], cwd=root, timeout=5,
+        return subprocess.check_output([*SAFE_GIT, *opts, "show", spec], cwd=root, timeout=5,
                                        stderr=subprocess.DEVNULL).decode("utf-8")
     except subprocess.CalledProcessError:
         return None  # такой версии нет
 
 
-def public_ok(cwd):
+def public_ok(root, opts):
     """Файлы из `.env-public`, у которых ВСЕ версии (на диске, подготовленная, сохранённая и каждая
     неотправленная в истории) состоят только из публичных переменных → (разрешённые, [нарушения]).
     Любая странность — путь вне репо, ярлык, не .env, ошибка чтения — исключение не действует."""
-    top = git_lines(["rev-parse", "--show-toplevel"], cwd)
-    if not top:
-        return set(), []
-    root = os.path.realpath(top[0])
     try:
         with open(os.path.join(root, ALLOW_FILE), encoding="utf-8") as f:
             listed = [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
@@ -148,17 +342,17 @@ def public_ok(cwd):
                 with open(full, encoding="utf-8") as f:
                     versions.append(f.read())
             for spec in (f":{rel}", f"HEAD:{rel}"):
-                v = git_version(spec, root)
+                v = git_version(spec, root, opts)
                 if v is not None:
                     versions.append(v)
             # отправка уносит всю неотправленную историю — проверить каждую её версию файла
             shas = subprocess.check_output(
-                [*SAFE_GIT, "log", "--full-history", "--format=%H", "--all", "--not", "--remotes", "--", rel],
+                [*SAFE_GIT, *opts, "log", "--full-history", "--format=%H", "--all", "--not", "--remotes", "--", rel],
                 cwd=root, timeout=10, stderr=subprocess.DEVNULL, text=True).split()
             if len(shas) > MAX_UNPUSHED:
                 raise ValueError(f"неотправленных версий больше {MAX_UNPUSHED}")
             for sha in shas:
-                v = git_version(f"{sha}:{rel}", root)
+                v = git_version(f"{sha}:{rel}", root, opts)
                 if v is not None:
                     versions.append(v)
         except (OSError, ValueError, subprocess.SubprocessError) as e:
@@ -175,16 +369,15 @@ def public_ok(cwd):
     return ok, bad
 
 
-def before(cmd, cwd):
-    if not GIT_WRITE.search(cmd):
-        return 0
-    ok, bad = public_ok(cwd)
-    tracked = secrets(["ls-files", "--full-name"], cwd) - ok
-    unignored = {porcelain_path(ln) for ln in git_lines(["status", "--porcelain", "--untracked-files=all"], cwd)
-                 if ln.startswith("??") and is_secret_env(porcelain_path(ln))} - ok
-    staged = secrets(["diff", "--cached", "--name-only"], cwd) - ok
+def check(cmd, root, opts):
+    """Что не так с .env в одном репозитории перед записью в git: [описание]."""
+    ok, bad = public_ok(root, opts)
+    tracked = secrets([*opts, "ls-files", "--full-name"], root) - ok
+    unignored = secrets([*opts, "ls-files", "--full-name", "--others", "--exclude-standard"], root) - ok
+    staged = secrets([*opts, "diff", "--cached", "--name-only"], root) - ok
     risky = looks_forced(cmd) or "update-index" in cmd
-    ignored = secrets(["ls-files", "--full-name", "--others", "--ignored", "--exclude-standard"], cwd) - ok if risky else set()
+    ignored = (secrets([*opts, "ls-files", "--full-name", "--others", "--ignored", "--exclude-standard"], root) - ok
+               if risky else set())
 
     problems = []
     if bad:
@@ -203,7 +396,20 @@ def before(cmd, cwd):
         problems.append("в команде есть «принудительно» (-f) или update-index, а в проекте лежат закрытые .gitignore секреты: "
                         + ", ".join(sorted(ignored)) + ". Добавляй без -f; если -f относится к другой команде — "
                         "раздели их на две")
+    return problems
 
+
+def before(cmd, cwd):
+    if not GIT_WRITE.search(cmd):
+        return 0
+    found, sure, unready = repos(cmd, cwd)
+    if not sure:
+        sys.stderr.write(UNKNOWN_TARGET)
+        return 2
+    if unready:
+        sys.stderr.write(NOT_REPO.format(", ".join(unready)))
+        return 2
+    problems = [(f"{root}: " if len(found) > 1 else "") + p for root, opts in found for p in check(cmd, root, opts)]
     if problems:
         sys.stderr.write("ЗАБЛОКИРОВАНО: секретные файлы .env рядом с git (правило безопасности).\n- "
                          + "\n- ".join(problems) + "\nВ git сохраняй только .env.example с заглушками.")
@@ -214,8 +420,13 @@ def before(cmd, cwd):
 def after(cmd, cwd):
     if not GIT_ANY.search(cmd):
         return 0
-    ok, _ = public_ok(cwd)
-    leaked = (secrets(["ls-files", "--full-name"], cwd) | secrets(["diff", "--cached", "--name-only"], cwd)) - ok
+    found, _, _ = repos(cmd, cwd)  # чего не узнать, то не дало записать в git ещё до команды
+    leaked = set()
+    for root, opts in found:
+        ok, _ = public_ok(root, opts)
+        files = (secrets([*opts, "ls-files", "--full-name"], root)
+                 | secrets([*opts, "diff", "--cached", "--name-only"], root)) - ok
+        leaked |= {os.path.join(root, f) if len(found) > 1 else f for f in files}
     if leaked:
         sys.stderr.write(
             "ВНИМАНИЕ: после команды секретный .env оказался в git: " + ", ".join(sorted(leaked)) + ".\n"
