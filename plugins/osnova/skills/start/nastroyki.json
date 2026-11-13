@@ -1,0 +1,57 @@
+{
+  "versiya": 4,
+  "chto_novogo": "опыт автора приходит с сервера по личному ключу: Claude ходит за ним без лишних вопросов, а файл с ключом не открывает",
+  "zachem": {
+    "model": "Модель — Opus, самая сильная, как у автора",
+    "effortLevel": "Глубина размышлений — высокая, как у автора",
+    "modelSettings": "Глубина размышлений — высокая, как у автора",
+    "permissions.defaultMode": "Режим «делаю сам, опасное останавливаю»: Claude работает без лишних вопросов, рискованное задерживает охрана",
+    "permissions.deny": "Запреты: обычными командами не открывать файлы с ключами и паролями, не выводить в разговор ключи с Railway и из буфера обмена, не открывать файл личного ключа к методу, не удалять папки целиком, ничего не делать от имени администратора (главная защита ключей — охрана пакета)",
+    "permissions.allow": "Безопасный просмотр (список файлов, состояние проекта) и поход за опытом автора на сервер знаний — сразу, без лишних проверок",
+    "autoMode.soft_deny": "Всегда спрашивать перед: перезаписью истории на GitHub, откатом без возврата, сохранением без проверки, отключением проверки секретов, выкладкой в интернет и сменой ключей там",
+    "statusLine": "Строка внизу окна, как у автора: папка, модель и глубина, насколько заполнен разговор (зелёный → жёлтый → красный: пора закончить задачу и начать новый разговор) и сколько лимита подписки потрачено за 5 часов и за неделю",
+    "extraKnownMarketplaces": "Пакет KOROBEINIKOV AI обновляется сам при запуске Claude"
+  },
+  "nastroyki": {
+    "model": "opus",
+    "effortLevel": "high",
+    "modelSettings": { "claude-opus-5-5": { "effortLevel": "high" } },
+    "statusLine": { "type": "command", "command": "python3 \"$HOME/.claude/plugins/data/osnova-korobeinikov-ai-method/stroka.py\"" },
+    "permissions": {
+      "defaultMode": "auto",
+      "deny": [
+        "Read(**/.env)", "Read(**/.env.*)", "Read(**/secrets/**)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
+        "Bash(cat *.env*)", "Bash(grep *.env*)", "Bash(rg *.env*)", "Bash(head *.env*)", "Bash(tail *.env*)",
+        "Bash(wc *.env*)", "Bash(less *.env*)", "Bash(more *.env*)",
+        "Bash(*.ssh/*)", "Bash(*.aws/*)", "Bash(*secrets/*)",
+        "Bash(*railway*variable*list*)", "Bash(*railway var*)", "Bash(*railway run*)", "Bash(*railway local*)",
+        "Bash(*railway api*)", "Bash(*railway ssh*)", "Bash(*railway shell*)", "Bash(*railway config*)",
+        "Bash(*railway env* config*)", "Bash(*railway env* show*)", "Bash(*railway env* info*)",
+        "Bash(*railway env*variables.*)", "Bash(*pbpaste*)",
+        "Read(~/.config/korobeinikov-ai/**)", "Bash(*.config/korobeinikov-ai*)",
+        "Bash(rm -rf:*)", "Bash(rm -fr:*)", "Bash(sudo:*)"
+      ],
+      "allow": [
+        "Bash(ls:*)", "Bash(pwd)", "Bash(which:*)", "Bash(git status)", "Bash(gh auth status)",
+        "mcp__plugin_osnova_znaniya__poluchit_navyk"
+      ]
+    },
+    "autoMode": {
+      "soft_deny": [
+        "$defaults",
+        "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git reset --hard:*)",
+        "Bash(*--no-verify*)", "Bash(git commit -n*)", "Bash(git commit * -n*)",
+        "Bash(*core.hooksPath*)", "Bash(*hookspath*)", "Bash(*VERIFY_OK*)",
+        "Bash(railway up:*)", "Bash(*klyuch.py*peredat*)","Bash(railway environment:*prod*)"
+      ]
+    }
+  },
+  "vsegda": {
+    "extraKnownMarketplaces": {
+      "korobeinikov-ai-method": {
+        "source": { "source": "github", "repo": "korobeinikov-ai/method" },
+        "autoUpdate": true
+      }
+    }
+  }
+}

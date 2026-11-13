@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "znaniya": {
+      "command": "python3",
+      "args": ["-I", "${CLAUDE_PLUGIN_ROOT}/znaniya/znaniya.py"]
+    }
+  }
+}
