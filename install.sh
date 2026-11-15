@@ -2,8 +2,8 @@
 # Установка метода KOROBEINIKOV AI на Mac одной командой. Её запускает сам Claude в приложении Claude (вкладка Code)
 # по инструкции CLAUDE.md, в фоне:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/korobeinikov-ai/method/main/install.sh) [личная ссылка]
-# Делает всё сам: инструменты Apple (человек только жмёт «Установить» в окне Apple), пакет и строку над полем ввода,
-# программы пакета, автообновление, личный доступ, папку ~/vibecoding. Повторный запуск безопасен: что стоит — не трогает.
+# Делает всё сам: приложение автора Taigan, инструменты Apple (человек только жмёт «Установить» в окне Apple), пакет
+# и строку над полем ввода, программы пакета, автообновление, личный доступ, папку ~/vibecoding. Повторный запуск безопасен: что стоит — не трогает.
 # Вывод читает Claude: в конце итог и пути для следующих шагов инструкции.
 # Запустили не из Claude (старые строки установки и личная строка в Терминале) — только говорит, как поставить метод
 # в приложении. Поэтому файл не переименовывать: на него ссылаются строки, которые люди получили раньше.
@@ -48,6 +48,33 @@ echo "Установка метода KOROBEINIKOV AI (Mac)"
 v=$(sw_vers -productVersion 2>/dev/null)
 [ "${v%%.*}" -ge 13 ] 2>/dev/null || stop "macOS ${v:-?}: нужна 13 или новее" "человеку: яблоко слева вверху → «Об этом Mac» → «Обновление ПО», потом поставить метод заново"
 ok "macOS $v"
+
+# Taigan — приложение автора для Mac: раскладка, буфер, снимки, диктовка. Есть — не трогаем: обновляется сам.
+# Нет — ставим из выпуска, только с подписью автора (то же правило, что у обновлений Taigan) и проверкой Apple.
+# Не вышло — метод ставится дальше. Сам Taigan не запускаем: его окно разрешений посреди установки только собьёт.
+TAIGAN=https://github.com/korobeinikov-ai/taigan/releases/latest/download/Taigan.dmg
+PODPIS='anchor apple generic and identifier "app.taigan.mac" and certificate leaf[subject.OU] = "HPUNA8MJ99"'
+taigan() {
+  local t app kuda
+  if [ -d /Applications/Taigan.app ] || [ -d "$HOME/Applications/Taigan.app" ]; then ok "Taigan уже есть"; return; fi
+  t=$(mktemp -d) || { echo "⚠️ Taigan не поставился: нет временной папки — методу не мешает"; return; }
+  app="$t/disk/Taigan.app"
+  if ! curl -fsSL --max-time 300 -o "$t/Taigan.dmg" "$TAIGAN" >/dev/null 2>&1; then
+    echo "⚠️ Taigan не скачался — методу не мешает"
+  elif ! hdiutil attach -quiet -nobrowse -readonly -noautoopen -mountpoint "$t/disk" "$t/Taigan.dmg" >/dev/null 2>&1; then
+    echo "⚠️ Taigan не открылся из скачанного файла — методу не мешает"
+  elif ! codesign --verify --deep --strict -R="$PODPIS" "$app" >/dev/null 2>&1 \
+      || ! spctl --assess --type execute "$app" >/dev/null 2>&1; then
+    echo "⚠️ Taigan: подпись автора или проверка Apple не сошлись — не ставлю, методу не мешает"
+  else
+    kuda=/Applications; [ -w "$kuda" ] || { kuda="$HOME/Applications"; mkdir -p "$kuda"; }
+    if ditto "$app" "$kuda/Taigan.app"; then ok "Taigan поставлен в Программы"
+    else echo "⚠️ Taigan не скопировался в $kuda — методу не мешает"; fi
+  fi
+  if [ -d "$app" ]; then hdiutil detach -quiet "$t/disk" || echo "⚠️ Taigan: временный диск не отключился — методу не мешает"; fi
+  rm -rf "$t" 2>/dev/null
+}
+taigan
 
 # Инструменты Apple: без них нет git и python3, а на них держится охрана пакета и сама установка пакета
 dev_ok() { local d; d=$(xcode-select -p 2>/dev/null) && [ -x "$d/usr/bin/git" ] && [ -x "$d/usr/bin/python3" ]; }

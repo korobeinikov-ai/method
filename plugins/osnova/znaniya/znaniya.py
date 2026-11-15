@@ -3,6 +3,7 @@
 
   znaniya.py           инструмент для Claude (сервер MCP): poluchit_navyk
   znaniya.py proverit  проверить сохранённый ключ
+  zametka(...)         заметка автору по тому же ключу — её зовёт навык avtoru
 
 Ключ лежит в ~/.config/korobeinikov-ai/klyuch, читать его может только владелец компьютера. Кладёт его личная
 строка установки из бота метода, мимо разговора. Значение ключа не печатается никогда. Только стандартная библиотека: работает на python3 из инструментов Apple.
@@ -64,6 +65,24 @@ def zapros(put, klyuch, parametry=None):
                 return 0, ""
         time.sleep(2)
     return 0, ""
+
+
+def zametka(dannye):
+    """Заметка автору (её отправляет навык avtoru): (код ответа, текст). Ключа нет — (None, ""), сервер молчит — (0, "").
+    Без повтора: заметка могла дойти, а ответ потеряться — второй раз автору её не шлём."""
+    klyuch = klyuch_s_diska()
+    if not klyuch:
+        return None, ""
+    z = Request(f"{ADRES}/zametka", data=json.dumps(dannye, ensure_ascii=False).encode("utf-8"), method="POST",
+                headers={"Authorization": f"Bearer {klyuch}", "Content-Type": "application/json"})
+    try:
+        with urlopen(z, timeout=30) as r:
+            return r.status, r.read().decode("utf-8")
+    except HTTPError as e:
+        return e.code, e.read().decode("utf-8", "replace")
+    except (URLError, OSError) as e:
+        print(f"znaniya: сервер не принял заметку ({type(e).__name__})", file=sys.stderr)
+        return 0, ""
 
 
 def poluchit(imya):
