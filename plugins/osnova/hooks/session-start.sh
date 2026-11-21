@@ -20,7 +20,8 @@ if [ -z "$dev" ] || [ ! -x "$dev/usr/bin/git" ] || [ ! -x "$dev/usr/bin/python3"
 
 ## ⚠️ Нет инструментов разработчика Apple
 На компьютере нет git и python3 — охрана пакета сейчас НЕ работает. До любой другой работы: запусти
-`xcode-select --install`, скажи человеку в окне нажать «Установить», дождись конца в фоне, потом /start.
+`xcode-select --install` и выведи окно вперёд: `open -b com.apple.dt.CommandLineTools.installondemand`. Скажи человеку
+нажать «Установить» (не кнопку про Xcode), потом «Принимаю». Дождись конца в фоне, потом /start.
 EOF
 fi
 

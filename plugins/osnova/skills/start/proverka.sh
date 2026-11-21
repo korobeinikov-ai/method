@@ -10,7 +10,7 @@ no() { echo "❌ $1 → $2"; bad=1; }
 warn() { echo "⚠️ $1 → $2"; }
 
 if xcode-select -p >/dev/null 2>&1; then ok "Инструменты разработчика Apple (git, python3)"
-else no "Нет инструментов разработчика Apple" "запусти сам xcode-select --install; руки человека: в окне нажать «Установить»; жди конца в фоне"; fi
+else no "Нет инструментов разработчика Apple" "запусти сам xcode-select --install и выведи окно вперёд: open -b com.apple.dt.CommandLineTools.installondemand; руки человека: «Установить» (не кнопку про Xcode), потом «Принимаю»; жди конца в фоне"; fi
 
 if command -v gh >/dev/null; then
   ok "GitHub CLI (связь с GitHub)"

@@ -2,8 +2,9 @@
 # Установка метода KOROBEINIKOV AI на Mac одной командой. Её запускает сам Claude в приложении Claude (вкладка Code)
 # по инструкции CLAUDE.md, в фоне:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/korobeinikov-ai/method/main/install.sh) [личная ссылка]
-# Делает всё сам: приложение автора Taigan, инструменты Apple (человек только жмёт «Установить» в окне Apple), пакет
-# и строку над полем ввода, программы пакета, автообновление, личный доступ, папку ~/vibecoding. Повторный запуск безопасен: что стоит — не трогает.
+# Делает всё сам: инструменты Apple (человек только жмёт «Установить» в окне Apple), пакет и строку над полем ввода,
+# программы пакета, автообновление, личный доступ, папку ~/vibecoding. Повторный запуск безопасен: что стоит — не трогает.
+# Taigan (приложение автора) не ставит: с 21.11 его ставят вручную, отдельно (решение автора).
 # Вывод читает Claude: в конце итог и пути для следующих шагов инструкции.
 # Запустили не из Claude (старые строки установки и личная строка в Терминале) — только говорит, как поставить метод
 # в приложении. Поэтому файл не переименовывать: на него ссылаются строки, которые люди получили раньше.
@@ -49,47 +50,29 @@ v=$(sw_vers -productVersion 2>/dev/null)
 [ "${v%%.*}" -ge 13 ] 2>/dev/null || stop "macOS ${v:-?}: нужна 13 или новее" "человеку: яблоко слева вверху → «Об этом Mac» → «Обновление ПО», потом поставить метод заново"
 ok "macOS $v"
 
-# Taigan — приложение автора для Mac: раскладка, буфер, снимки, диктовка. Есть — не трогаем: обновляется сам.
-# Нет — ставим из выпуска, только с подписью автора (то же правило, что у обновлений Taigan) и проверкой Apple.
-# Не вышло — метод ставится дальше. Сам Taigan не запускаем: его окно разрешений посреди установки только собьёт.
-TAIGAN=https://github.com/korobeinikov-ai/taigan/releases/latest/download/Taigan.dmg
-PODPIS='anchor apple generic and identifier "app.taigan.mac" and certificate leaf[subject.OU] = "HPUNA8MJ99"'
-taigan() {
-  local t app kuda
-  if [ -d /Applications/Taigan.app ] || [ -d "$HOME/Applications/Taigan.app" ]; then ok "Taigan уже есть"; return; fi
-  t=$(mktemp -d) || { echo "⚠️ Taigan не поставился: нет временной папки — методу не мешает"; return; }
-  app="$t/disk/Taigan.app"
-  if ! curl -fsSL --max-time 300 -o "$t/Taigan.dmg" "$TAIGAN" >/dev/null 2>&1; then
-    echo "⚠️ Taigan не скачался — методу не мешает"
-  elif ! hdiutil attach -quiet -nobrowse -readonly -noautoopen -mountpoint "$t/disk" "$t/Taigan.dmg" >/dev/null 2>&1; then
-    echo "⚠️ Taigan не открылся из скачанного файла — методу не мешает"
-  elif ! codesign --verify --deep --strict -R="$PODPIS" "$app" >/dev/null 2>&1 \
-      || ! spctl --assess --type execute "$app" >/dev/null 2>&1; then
-    echo "⚠️ Taigan: подпись автора или проверка Apple не сошлись — не ставлю, методу не мешает"
-  else
-    kuda=/Applications; [ -w "$kuda" ] || { kuda="$HOME/Applications"; mkdir -p "$kuda"; }
-    if ditto "$app" "$kuda/Taigan.app"; then ok "Taigan поставлен в Программы"
-    else echo "⚠️ Taigan не скопировался в $kuda — методу не мешает"; fi
-  fi
-  if [ -d "$app" ]; then hdiutil detach -quiet "$t/disk" || echo "⚠️ Taigan: временный диск не отключился — методу не мешает"; fi
-  rm -rf "$t" 2>/dev/null
-}
-taigan
-
 # Инструменты Apple: без них нет git и python3, а на них держится охрана пакета и сама установка пакета
 dev_ok() { local d; d=$(xcode-select -p 2>/dev/null) && [ -x "$d/usr/bin/git" ] && [ -x "$d/usr/bin/python3" ]; }
+okno() {  # открытое из фона, окно Apple часто встаёт за окнами Claude: выводим его вперёд
+  xcode-select --install >/dev/null 2>&1; sleep 2
+  open -b com.apple.dt.CommandLineTools.installondemand >/dev/null 2>&1 \
+    || echo "⚠️ Окно Apple вперёд не вывел → ДЛЯ CLAUDE: скажи человеку поискать окно Apple за окнами Claude"
+}
 if dev_ok; then
   ok "Инструменты Apple уже есть"
 else
-  xcode-select --install >/dev/null 2>&1
-  echo "⏳ ОКНО APPLE: человеку нажать в нём «Установить» и принять условия. Дальше качается само, обычно до получаса — жду."
-  t=0
+  okno
+  echo "⏳ ОКНО APPLE открыто поверх Claude: человеку нажать «Установить» (не кнопку про Xcode), потом «Принимаю». Дальше качается само, обычно до получаса — жду."
+  t=0; net=0
   until dev_ok; do
     [ $t -ge 3600 ] && stop "Инструменты Apple не поставились за час" "запусти установку ещё раз: окно Apple откроется снова"
     sleep 15; t=$((t + 15))
-    if [ $((t % 300)) -eq 0 ]; then  # раз в 5 минут: идёт ли установка; окно закрыли — открываем снова
-      if pgrep -f "Install Command Line Developer Tools" >/dev/null; then echo "⏳ Инструменты Apple ставятся, прошло $((t / 60)) мин"
-      else xcode-select --install >/dev/null 2>&1; echo "⏳ ОКНО APPLE закрыли раньше времени, открыл снова: человеку нажать «Установить»"; fi
+    # [s] — чтобы pgrep не нашёл саму эту проверку, если скрипт запустили текстом в командной строке
+    if pgrep -f "Install Command Line Developer Tool[s]" >/dev/null; then
+      net=0; [ $((t % 300)) -eq 0 ] && echo "⏳ Инструменты Apple ставятся, прошло $((t / 60)) мин"
+    elif [ $((net += 1)) -ge 2 ]; then  # окна нет полминуты, а инструментов нет — открываем снова
+      net=0
+      pgrep -x "App Store" >/dev/null && echo "⚠️ ОКНО APPLE: похоже, нажали кнопку про Xcode → ДЛЯ CLAUDE: скажи человеку закрыть App Store, большая программа Xcode не нужна"
+      okno; echo "⏳ ОКНО APPLE закрыли раньше времени, открыл снова поверх Claude: человеку нажать «Установить»"
     fi
   done
   ok "Инструменты Apple поставлены"
